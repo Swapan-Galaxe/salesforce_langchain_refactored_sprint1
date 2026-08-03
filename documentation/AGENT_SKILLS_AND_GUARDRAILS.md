@@ -1,6 +1,6 @@
 # Agent Skills and Guardrails
 
-## Runtime model
+## Runtime model ##new
 
 Every capability is registered in `agent_security.py` as a `SkillDefinition`.
 The runtime checks the agent allowlist, risk level, user role, execution budget,
