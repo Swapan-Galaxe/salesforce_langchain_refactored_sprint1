@@ -1,0 +1,9 @@
+
+# Agent security artifacts
+.env
+.env.*
+!.env.template
+agent_audit.jsonl
+audit_log.json
+session_history.json
+chroma_db/
