@@ -1,5 +1,43 @@
 # System Summary - Quick Reference
 
+## Use Case Summary
+
+This system is an AI-powered Salesforce sales intelligence assistant for sales representatives, sales managers, sales operations teams, and revenue leaders.
+
+It connects to Salesforce, analyzes leads and opportunities, and allows users to ask sales questions in natural language. The system returns prioritized insights, risk explanations, pipeline forecasts, pricing guidance, and recommended follow-up actions.
+
+### Business Problems Addressed
+
+- Identifying which leads should be contacted first
+- Detecting stalled, overdue, low-probability, or high-value deals at risk
+- Understanding overall pipeline health and expected revenue
+- Recommending timely follow-up actions
+- Supporting pricing, discount, and margin decisions
+- Finding similar opportunities and recalling previous conversations
+
+### Typical User Workflow
+
+1. A user asks a sales-related question.
+2. The system retrieves relevant Salesforce records.
+3. AI scoring, specialist agents, and optional RAG search analyze the data.
+4. The system provides evidence-based findings and recommended actions.
+5. The user reviews the recommendations and decides on the next business action.
+
+### Example Questions
+
+- “Which high-value deals are at risk?”
+- “Show me the top priority leads.”
+- “What should I focus on this week?”
+- “Give me a revenue forecast for this quarter.”
+- “Generate a follow-up plan for hot opportunities.”
+- “Find opportunities similar to our best customers.”
+
+### Business Value
+
+The system helps sales teams spend less time searching Salesforce, respond to leads faster, detect deal problems earlier, improve follow-up consistency, and make better pipeline decisions.
+
+In summary, it acts as an intelligent sales copilot that converts Salesforce data into prioritized insights, risk explanations, forecasts, and recommended next actions.
+
 ## What This System Does
 
 AI-powered Salesforce sales intelligence with LangChain ReAct agents, multi-agent orchestration, and RAG semantic search. Analyzes leads, opportunities, risks, pricing, and generates follow-up actions.
@@ -379,4 +417,3 @@ streamlit run app_multi_agent.py
 - **Scalability**: 10-20 users (current), 100,000+ (with enhancements)
 - **Security**: Full guardrails protection with audit logging
 - **Quality Assurance**: Real-time hallucination detection and RAG quality metrics
-
