@@ -6,12 +6,15 @@ from skills.prioritization_simple import LeadPrioritizer, OpportunityScorer, Fol
 from agents.conversational_agent_enhanced import ConversationalSalesAgentEnhanced
 from security.guardrails import GuardrailsManager
 from services.evaluation import EvaluationManager
+from tests.test_config import get_test_agent
 import plotly.graph_objects as go
 import plotly.express as px
 import pandas as pd
 import time
 
 load_dotenv()
+
+use_mock_data = os.getenv("USE_MOCK_DATA", "false").lower() == "true"
 
 st.set_page_config(page_title="Salesforce AI Assistant", page_icon="🚀", layout="wide", initial_sidebar_state="expanded")
 
@@ -112,26 +115,36 @@ with st.sidebar:
     st.markdown("✅ Follow-up Generation")
     st.markdown("✅ Real-time Dashboards")
     
+    if use_mock_data:
+        st.markdown("---")
+        st.info("🧪 TEST MODE: Using mock Salesforce data. No API calls will be made.")
+
     st.markdown("---")
     st.caption("Powered by OpenAI GPT-4")
 
 # Main content
 if 'run_analysis' in st.session_state and st.session_state.run_analysis:
     
-    with st.spinner("Connecting to Salesforce..."):
-        agent = SalesforceAgent(
-            sf_username=os.getenv("SF_USERNAME"),
-            sf_password=os.getenv("SF_PASSWORD"),
-            sf_token=os.getenv("SF_TOKEN"),
-            limit=limit
-        )
+    with st.spinner("Connecting to data source..."):
+        if use_mock_data:
+            agent = get_test_agent(limit=limit)
+        else:
+            agent = SalesforceAgent(
+                sf_username=os.getenv("SALESFORCE_USERNAME") or os.getenv("SF_USERNAME"),
+                sf_password=os.getenv("SALESFORCE_PASSWORD") or os.getenv("SF_PASSWORD"),
+                sf_token=os.getenv("SALESFORCE_SECURITY_TOKEN") or os.getenv("SF_TOKEN"),
+                limit=limit
+            )
         
         leads = agent.get_leads()
         opportunities = agent.get_opportunities()
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.success(f"✅ Connected to Salesforce")
+        if use_mock_data:
+            st.success(f"✅ Connected to Mock Data")
+        else:
+            st.success(f"✅ Connected to Salesforce")
     with col2:
         st.info(f"📊 {len(leads)} Leads Retrieved")
     with col3:
@@ -461,12 +474,26 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
         # Initialize chat agent
         if 'chat_agent' not in st.session_state:
             with st.spinner("Initializing AI assistant with memory & streaming..."):
-                st.session_state.chat_agent = ConversationalSalesAgentEnhanced(
-                    sf_username=os.getenv("SF_USERNAME"),
-                    sf_password=os.getenv("SF_PASSWORD"),
-                    sf_token=os.getenv("SF_TOKEN"),
-                    cache_ttl=300  # 5 minutes cache
-                )
+                sf_username = os.getenv('SALESFORCE_USERNAME') or os.getenv('SF_USERNAME')
+                sf_password = os.getenv('SALESFORCE_PASSWORD') or os.getenv('SF_PASSWORD')
+                sf_token = os.getenv('SALESFORCE_SECURITY_TOKEN') or os.getenv('SF_TOKEN')
+
+                if use_mock_data or not all([sf_username, sf_password, sf_token]):
+                    if not use_mock_data:
+                        st.warning("Salesforce credentials were not found, so chat is using mock data mode.")
+                    from tests.mock_salesforce_agent import MockSalesforceAgent
+                    sf_agent = MockSalesforceAgent(limit=50)
+                    st.session_state.chat_agent = ConversationalSalesAgentEnhanced(
+                        cache_ttl=300,
+                        sf_agent=sf_agent
+                    )
+                else:
+                    st.session_state.chat_agent = ConversationalSalesAgentEnhanced(
+                        sf_username=sf_username,
+                        sf_password=sf_password,
+                        sf_token=sf_token,
+                        cache_ttl=300
+                    )
         
         # Initialize chat history
         if 'chat_history' not in st.session_state:
