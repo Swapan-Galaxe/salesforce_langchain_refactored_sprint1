@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+import json
 from dotenv import load_dotenv
 from services.salesforce_agent import SalesforceAgent, build_deal_risk_dashboard
 from skills.prioritization_simple import LeadPrioritizer, OpportunityScorer, FollowUpGenerator
@@ -38,72 +39,181 @@ if 'evaluator' not in st.session_state:
 if 'user_id' not in st.session_state:
     st.session_state.user_id = "user_" + str(hash(st.session_state.get('session_id', 'default')))
 
+if 'history_file' not in st.session_state:
+    st.session_state.history_file = os.path.join(os.getcwd(), "session_history.json")
+
+if 'chat_history' not in st.session_state:
+    history_file = st.session_state.history_file
+    if os.path.exists(history_file):
+        try:
+            with open(history_file, 'r', encoding='utf-8') as f:
+                st.session_state.chat_history = json.load(f)
+        except Exception:
+            st.session_state.chat_history = []
+    else:
+        st.session_state.chat_history = []
+
+
+def save_chat_history():
+    """Persist single-agent chat history to disk."""
+    try:
+        with open(st.session_state.history_file, 'w', encoding='utf-8') as f:
+            json.dump(st.session_state.chat_history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        st.warning(f"Could not save chat history: {e}")
+
 # Custom CSS
 st.markdown("""
 <style>
     .main-header {
-        font-size: 3rem;
-        font-weight: bold;
-        background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+        font-size: 2.6rem;
+        font-weight: 800;
+        background: linear-gradient(90deg, #2d6cdf 0%, #5f2fc7 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        text-align: center;
-        padding: 1rem 0;
+        text-align: left;
+        margin-bottom: 0.3rem;
     }
     .sub-header {
-        text-align: center;
-        color: #666;
-        font-size: 1.2rem;
-        margin-bottom: 2rem;
+        text-align: left;
+        color: #4d4d4d;
+        font-size: 1rem;
+        margin-top: 0.5rem;
+        margin-bottom: 1rem;
+        line-height: 1.55;
+        max-width: 860px;
     }
-    .metric-card {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        padding: 1.5rem;
-        border-radius: 10px;
-        color: white;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    .hero-block {
+        position: relative;
+        background: #ffffff;
+        border-radius: 28px;
+        padding: 1.75rem;
+        box-shadow: 0 20px 60px rgba(57, 91, 215, 0.08);
+        margin-bottom: 1.5rem;
+        text-align: left;
+    }
+    .mode-badge {
+        display: inline-block;
+        background: #eff6ff;
+        color: #1d4ed8;
+        font-weight: 700;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        border: 1px solid rgba(59, 130, 246, 0.2);
+        box-shadow: 0 4px 10px rgba(59, 130, 246, 0.1);
+        font-size: 0.88rem;
+        margin-bottom: 0.85rem;
+    }
+    .sidebar-logo {
+        width: 140px;
+        display: block;
+        margin: 0 auto 1rem auto;
+    }
+    .sidebar .mode-badge {
+        margin-left: 0;
+        margin-right: 0;
+    }
+    .hero-subtext {
+        color: #5f5f6d;
+        margin-top: 0.75rem;
+    }
+    .stat-card {
+        background: #f4f6fb;
+        border-radius: 16px;
+        padding: 1.25rem;
+        box-shadow: 0 10px 28px rgba(29, 53, 102, 0.06);
+        transition: transform 0.2s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    .stat-card h4,
+    .section-card h4 {
+        font-size: 1.05rem;
+        margin-bottom: 0.65rem;
+    }
+    .stat-card p,
+    .section-card p,
+    .lead-card p,
+    .opp-card p {
+        font-size: 0.95rem;
+        margin: 0.35rem 0;
+        line-height: 1.5;
+    }
+    .lead-card h3,
+    .opp-card h3 {
+        font-size: 1.15rem;
+        margin-bottom: 0.75rem;
     }
     .stButton>button {
         width: 100%;
-        border-radius: 10px;
+        border-radius: 12px;
         height: 3rem;
-        font-weight: bold;
+        font-weight: 700;
+        font-size: 0.95rem;
     }
-    .lead-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #667eea;
-        margin: 0.5rem 0;
+    .lead-card, .opp-card {
+        background: #ffffff;
+        padding: 1.2rem;
+        border-radius: 16px;
+        border-left: 5px solid #3f72af;
+        box-shadow: 0 10px 24px rgba(81, 111, 176, 0.08);
+        margin-bottom: 1rem;
     }
-    .opp-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 8px;
-        border-left: 4px solid #28a745;
-        margin: 0.5rem 0;
+    .opp-card { border-left-color: #2a9d8f; }
+    .sidebar .stButton>button {
+        border-radius: 12px;
+    }
+    .section-card {
+        background: #ffffff;
+        border-radius: 18px;
+        padding: 1.5rem;
+        border: 1px solid #e8ebf2;
+        box-shadow: 0 14px 36px rgba(67, 84, 114, 0.06);
+        margin-bottom: 1rem;
+    }
+    body .stApp h1 {
+        font-size: 2.2rem !important;
+        text-align: left !important;
+    }
+    body .stApp h2 {
+        font-size: 1.45rem !important;
+        text-align: left !important;
+    }
+    body .stApp h3 {
+        font-size: 1.05rem !important;
+        text-align: left !important;
+    }
+    body .stApp h4 {
+        font-size: 0.98rem !important;
+        text-align: left !important;
+    }
+    body .stApp p {
+        font-size: 0.95rem !important;
+        line-height: 1.6 !important;
+        text-align: left !important;
     }
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<h1 class="main-header">🚀 Salesforce AI Assistant</h1>', unsafe_allow_html=True)
-st.markdown('<p class="sub-header">AI-powered lead prioritization and opportunity scoring with real-time analytics</p>', unsafe_allow_html=True)
+st.markdown('<div class="hero-block"><h1 class="main-header">🚀 Salesforce AI Assistant</h1><p class="sub-header">A polished sales intelligence workspace for leads, opportunities, pipeline risk, and follow-up actions.</p></div>', unsafe_allow_html=True)
+
 
 # Sidebar
 with st.sidebar:
-    st.image("https://www.salesforce.com/content/dam/sfdc-docs/www/logos/logo-salesforce.svg", width=200)
+    st.image("https://www.salesforce.com/content/dam/sfdc-docs/www/logos/logo-salesforce.svg", width=140, caption="Salesforce AI")
     st.markdown("---")
-    st.header("⚙️ Configuration")
+    st.header("Configuration")
     
-    limit = st.slider("📊 Records to Analyze", 5, 50, 20, help="Number of leads and opportunities to fetch")
-    cache_ttl = st.slider("⏱️ Cache Duration (seconds)", 60, 600, 300, help="How long to cache Salesforce data")
+    limit = st.slider("Records to Analyze", 5, 50, 20, help="Number of leads and opportunities to fetch")
+    cache_ttl = st.slider("Cache Duration (seconds)", 60, 600, 300, help="How long to cache Salesforce data")
     
     st.markdown("---")
     
-    if st.button("🚀 Run AI Analysis", type="primary", use_container_width=True):
+    if st.button("Run AI Analysis", type="primary", use_container_width=True):
         st.session_state.run_analysis = True
     
-    if st.button("🔄 Refresh Salesforce Data", use_container_width=True):
+    if st.button("Refresh Salesforce Data", use_container_width=True):
         if 'chat_agent' in st.session_state:
             st.session_state.chat_agent.refresh_cache()
             st.success("Cache refreshed!")
@@ -115,9 +225,10 @@ with st.sidebar:
     st.markdown("✅ Follow-up Generation")
     st.markdown("✅ Real-time Dashboards")
     
+    st.markdown("---")
+    st.markdown(f'<div class="mode-badge">{"TEST MODE: Mock Data" if use_mock_data else "Live Salesforce"}</div>', unsafe_allow_html=True)
     if use_mock_data:
-        st.markdown("---")
-        st.info("🧪 TEST MODE: Using mock Salesforce data. No API calls will be made.")
+        st.info("🧪 Using mock Salesforce data. No API calls will be made.")
 
     st.markdown("---")
     st.caption("Powered by OpenAI GPT-4")
@@ -126,32 +237,40 @@ with st.sidebar:
 if 'run_analysis' in st.session_state and st.session_state.run_analysis:
     
     with st.spinner("Connecting to data source..."):
-        if use_mock_data:
+        sf_username = os.getenv("SALESFORCE_USERNAME") or os.getenv("SF_USERNAME")
+        sf_password = os.getenv("SALESFORCE_PASSWORD") or os.getenv("SF_PASSWORD")
+        sf_token = os.getenv("SALESFORCE_SECURITY_TOKEN") or os.getenv("SF_TOKEN")
+
+        if use_mock_data or not all([sf_username, sf_password, sf_token]):
+            if not use_mock_data:
+                st.warning("Salesforce credentials not found. Using mock data mode.")
+            else:
+                st.info("USE_MOCK_DATA=true detected. Using mock data mode.")
             agent = get_test_agent(limit=limit)
         else:
             agent = SalesforceAgent(
-                sf_username=os.getenv("SALESFORCE_USERNAME") or os.getenv("SF_USERNAME"),
-                sf_password=os.getenv("SALESFORCE_PASSWORD") or os.getenv("SF_PASSWORD"),
-                sf_token=os.getenv("SALESFORCE_SECURITY_TOKEN") or os.getenv("SF_TOKEN"),
+                sf_username=sf_username,
+                sf_password=sf_password,
+                sf_token=sf_token,
                 limit=limit
             )
         
         leads = agent.get_leads()
         opportunities = agent.get_opportunities()
     
+    # Create tabs
+    tab1, tab2, tab3, tab4 = st.tabs(["Leads", "Opportunities", "Dashboard", "AI Chat"])
+    
     col1, col2, col3 = st.columns(3)
     with col1:
         if use_mock_data:
-            st.success(f"✅ Connected to Mock Data")
+            st.success("Connected to Mock Data")
         else:
-            st.success(f"✅ Connected to Salesforce")
+            st.success("Connected to Salesforce")
     with col2:
-        st.info(f"📊 {len(leads)} Leads Retrieved")
+        st.info(f"{len(leads)} Leads Retrieved")
     with col3:
-        st.info(f"💰 {len(opportunities)} Opportunities Retrieved")
-    
-    # Create tabs
-    tab1, tab2, tab3, tab4 = st.tabs(["📊 Leads", "💰 Opportunities", "📈 Dashboard", "💬 AI Chat"])
+        st.info(f"{len(opportunities)} Opportunities Retrieved")
     
     # TAB 1: LEADS
     with tab1:
@@ -163,8 +282,10 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
         
         col1, col2 = st.columns([2, 1])
         
+        selected_lead = None
+
         with col1:
-            st.subheader("🏆 Top Leads")
+            st.subheader("Top Leads")
             
             # Create dataframe
             df_leads = pd.DataFrame(scored_leads[:10])
@@ -210,29 +331,40 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
             st.plotly_chart(fig_leads, use_container_width=True)
         
         with col2:
-            st.subheader("⭐ Top Lead Details")
-            
+            st.subheader("Selected Lead Details")
+
             if scored_leads:
-                top_lead = scored_leads[0]
-                
+                lead_names = [lead['Name'] for lead in scored_leads]
+                selected_lead_name = st.session_state.get('selected_lead_name', lead_names[0])
+                selected_lead_name = st.selectbox(
+                    "Select a lead to inspect",
+                    lead_names,
+                    index=lead_names.index(selected_lead_name) if selected_lead_name in lead_names else 0,
+                    key="selected_lead_name"
+                )
+                selected_lead = next((lead for lead in scored_leads if lead['Name'] == selected_lead_name), scored_leads[0])
+
+            if selected_lead:
                 st.markdown(f"""
                 <div class="lead-card">
-                    <h3>👤 {top_lead['Name']}</h3>
-                    <p><b>🏢 Company:</b> {top_lead['Company']}</p>
-                    <p><b>📊 Status:</b> {top_lead.get('Status', 'N/A')}</p>
-                    <p><b>📧 Email:</b> {top_lead.get('Email', 'N/A')}</p>
+                    <h3>{selected_lead['Name']}</h3>
+                    <p><b>Company:</b> {selected_lead['Company']}</p>
+                    <p><b>Status:</b> {selected_lead.get('Status', 'N/A')}</p>
+                    <p><b>Email:</b> {selected_lead.get('Email', 'N/A')}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                score = top_lead['priority_score']
-                st.metric("🎯 Priority Score", score, delta=f"{score-50} vs avg")
+                score = selected_lead['priority_score']
+                st.metric("Priority Score", score, delta=f"{score-50} vs avg")
                 
-                if st.button("Generate Follow-Up Actions"):
+                if st.button("Generate Follow-Up Actions", key="lead_followup"):
                     with st.spinner("Generating..."):
                         generator = FollowUpGenerator()
-                        followup = generator.generate_actions(top_lead, "lead")
+                        followup = generator.generate_actions(selected_lead, "lead")
                         st.markdown("### 📝 Follow-Up Actions")
                         st.write(followup)
+            else:
+                st.info("No lead selected or no leads available.")
     
     # TAB 2: OPPORTUNITIES
     with tab2:
@@ -244,9 +376,11 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
         
         col1, col2 = st.columns([2, 1])
         
+        selected_opp = None
+
         with col1:
-            st.subheader("💎 Top Opportunities")
-            
+            st.subheader("Top Opportunities")
+
             # Create dataframe
             df_opps = pd.DataFrame(scored_opps[:10])
             df_display = df_opps[['Name', 'Amount', 'StageName', 'conversion_score']].copy()
@@ -296,75 +430,83 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
             st.plotly_chart(fig_opps, use_container_width=True)
         
         with col2:
-            st.subheader("💰 Top Opportunity Details")
+            st.subheader("Selected Opportunity Details")
             
             if scored_opps:
-                top_opp = scored_opps[0]
-                
+                opp_names = [opp['Name'] for opp in scored_opps]
+                selected_opp_name = st.session_state.get('selected_opp_name', opp_names[0])
+                selected_opp_name = st.selectbox(
+                    "Select an opportunity to inspect",
+                    opp_names,
+                    index=opp_names.index(selected_opp_name) if selected_opp_name in opp_names else 0,
+                    key="selected_opp_name"
+                )
+                selected_opp = next((opp for opp in scored_opps if opp['Name'] == selected_opp_name), scored_opps[0])
+
+            if selected_opp:
                 st.markdown(f"""
                 <div class="opp-card">
-                    <h3>💼 {top_opp['Name']}</h3>
-                    <p><b>💵 Amount:</b> ${top_opp['Amount']:,.0f}</p>
-                    <p><b>📈 Stage:</b> {top_opp.get('StageName', 'N/A')}</p>
-                    <p><b>📅 Close Date:</b> {top_opp.get('CloseDate', 'N/A')}</p>
+                    <h3>{selected_opp['Name']}</h3>
+                    <p><b>Amount:</b> ${selected_opp['Amount']:,.0f}</p>
+                    <p><b>Stage:</b> {selected_opp.get('StageName', 'N/A')}</p>
+                    <p><b>Close Date:</b> {selected_opp.get('CloseDate', 'N/A')}</p>
                 </div>
                 """, unsafe_allow_html=True)
                 
-                score = top_opp['conversion_score']
-                st.metric("🎯 Conversion Score", score, delta=f"{score-50} vs avg")
+                score = selected_opp['conversion_score']
+                st.metric("Conversion Score", score, delta=f"{score-50} vs avg")
                 
                 if st.button("Generate Follow-Up Actions", key="opp_followup"):
                     with st.spinner("Generating..."):
                         generator = FollowUpGenerator()
-                        followup = generator.generate_actions(top_opp, "opportunity")
+                        followup = generator.generate_actions(selected_opp, "opportunity")
                         st.markdown("### 📝 Follow-Up Actions")
                         st.write(followup)
+            else:
+                st.info("No opportunity selected or no opportunities available.")
     
     # TAB 3: DASHBOARD
     with tab3:
         st.header("Analytics Dashboard")
+        st.markdown("Create a concise view of sales performance, risk, and runway in one place.")
         
-        col1, col2, col3, col4 = st.columns(4)
-        
-        with col1:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;">
-                <h2 style="margin: 0; font-size: 2.5rem;">{}</h2>
-                <p style="margin: 0;">📊 Total Leads</p>
-            </div>
-            """.format(len(scored_leads)), unsafe_allow_html=True)
-        
-        with col2:
-            avg_lead_score = sum(l['priority_score'] for l in scored_leads) / len(scored_leads)
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;">
-                <h2 style="margin: 0; font-size: 2.5rem;">{:.1f}</h2>
-                <p style="margin: 0;">⭐ Avg Lead Score</p>
-            </div>
-            """.format(avg_lead_score), unsafe_allow_html=True)
-        
-        with col3:
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;">
-                <h2 style="margin: 0; font-size: 2.5rem;">{}</h2>
-                <p style="margin: 0;">💼 Total Opportunities</p>
-            </div>
-            """.format(len(scored_opps)), unsafe_allow_html=True)
-        
-        with col4:
-            total_value = sum(o['Amount'] for o in scored_opps if o['Amount'])
-            st.markdown("""
-            <div style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); padding: 1.5rem; border-radius: 10px; color: white; text-align: center;">
-                <h2 style="margin: 0; font-size: 2.5rem;">${:,.0f}</h2>
-                <p style="margin: 0;">💰 Total Pipeline</p>
-            </div>
-            """.format(total_value), unsafe_allow_html=True)
+        total_leads = len(scored_leads)
+        avg_lead_score = sum(l['priority_score'] for l in scored_leads) / len(scored_leads) if scored_leads else 0
+        total_opps = len(scored_opps)
+        total_value = sum(o['Amount'] for o in scored_opps if o.get('Amount'))
 
-        # Phase 1: deterministic deal-risk dashboard and next actions.
-        # Risk scores are calculated from Salesforce evidence; the LLM is not
-        # used to determine the score.
+        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+        metric_col1.markdown(f"""
+            <div class="stat-card">
+                <h4>Total Leads</h4>
+                <p style="font-size: 2.4rem; font-weight: 800; margin: 0;">{total_leads}</p>
+                <p style="color: #64748b; margin-top: 0.4rem;">Lead coverage across Salesforce.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        metric_col2.markdown(f"""
+            <div class="stat-card">
+                <h4>Avg Lead Score</h4>
+                <p style="font-size: 2.4rem; font-weight: 800; margin: 0;">{avg_lead_score:.1f}</p>
+                <p style="color: #64748b; margin-top: 0.4rem;">Quality signal across active leads.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        metric_col3.markdown(f"""
+            <div class="stat-card">
+                <h4>Total Opportunities</h4>
+                <p style="font-size: 2.4rem; font-weight: 800; margin: 0;">{total_opps}</p>
+                <p style="color: #64748b; margin-top: 0.4rem;">Pipeline opportunities in scope.</p>
+            </div>
+        """, unsafe_allow_html=True)
+        metric_col4.markdown(f"""
+            <div class="stat-card">
+                <h4>Total Pipeline</h4>
+                <p style="font-size: 2.4rem; font-weight: 800; margin: 0;">${total_value:,.0f}</p>
+                <p style="color: #64748b; margin-top: 0.4rem;">Estimated revenue across opportunities.</p>
+            </div>
+        """, unsafe_allow_html=True)
+
         st.markdown("---")
-        st.subheader("⚠️ Deal Risk and Recommended Next Actions")
+        st.subheader("Deal Risk and Recommended Next Actions")
         risk_rows = build_deal_risk_dashboard(opportunities)
 
         if risk_rows:
@@ -374,9 +516,27 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
             at_risk_value = risk_df.loc[risk_df["risk_score"] >= 40, "risk_value"].sum()
 
             risk_col1, risk_col2, risk_col3 = st.columns(3)
-            risk_col1.metric("Critical Deals", critical_count)
-            risk_col2.metric("Deals Needing Attention", at_risk_count)
-            risk_col3.metric("At-Risk Pipeline", f"${at_risk_value:,.0f}")
+            risk_col1.markdown(f"""
+                <div class="section-card">
+                    <h4>Critical Deals</h4>
+                    <p style="font-size: 2rem; font-weight: 700; margin: 0;">{critical_count}</p>
+                    <p style="color: #64748b; margin-top: 0.35rem;">Deals requiring immediate attention.</p>
+                </div>
+            """, unsafe_allow_html=True)
+            risk_col2.markdown(f"""
+                <div class="section-card">
+                    <h4>Deals Needing Attention</h4>
+                    <p style="font-size: 2rem; font-weight: 700; margin: 0;">{at_risk_count}</p>
+                    <p style="color: #64748b; margin-top: 0.35rem;">Potential at-risk opportunities.</p>
+                </div>
+            """, unsafe_allow_html=True)
+            risk_col3.markdown(f"""
+                <div class="section-card">
+                    <h4>At-Risk Pipeline</h4>
+                    <p style="font-size: 2rem; font-weight: 700; margin: 0;">${at_risk_value:,.0f}</p>
+                    <p style="color: #64748b; margin-top: 0.35rem;">Potential exposure if deals slip.</p>
+                </div>
+            """, unsafe_allow_html=True)
 
             display_columns = [
                 "Name", "Amount", "StageName", "Probability", "CloseDate",
@@ -394,7 +554,10 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
                 }.get(column, column)
                 for column in display_df.columns
             ]
+
+            st.markdown("<div class='section-card'>", unsafe_allow_html=True)
             st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
             selected_name = st.selectbox(
                 "Inspect risk evidence",
@@ -402,21 +565,24 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
                 key="deal_risk_selection"
             )
             selected_row = next(row for row in risk_rows if row.get("Name") == selected_name)
-            st.info(
-                f"**{selected_row.get('risk_level')} ({selected_row.get('risk_score')}/100):** "
-                + "; ".join(selected_row.get("risk_reasons", []))
-                + f"\n\n**Next action:** {selected_row.get('next_action')}"
-            )
-            st.caption("Recommendations are advisory. Review them before creating Salesforce tasks or contacting customers.")
+            st.markdown(f"""
+                <div class='section-card'>
+                    <h4>Risk Details for {selected_row.get('Name')}</h4>
+                    <p><strong>Risk Level:</strong> {selected_row.get('risk_level')} ({selected_row.get('risk_score')}/100)</p>
+                    <p><strong>Recommended Action:</strong> {selected_row.get('next_action')}</p>
+                    <p style='color: #475569;'>{' ; '.join(selected_row.get('risk_reasons', []))}</p>
+                </div>
+            """, unsafe_allow_html=True)
+            st.caption("Recommendations are advisory. Review before acting.")
         else:
             st.info("No open opportunities are available for risk analysis.")
+
+        st.markdown("---")
+        st.subheader("Performance Charts")
+
+        chart_col1, chart_col2 = st.columns(2)
         
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Lead score distribution with gradient
+        with chart_col1:
             fig_dist = go.Figure(data=[
                 go.Histogram(
                     x=[l['priority_score'] for l in scored_leads],
@@ -429,16 +595,17 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
                 )
             ])
             fig_dist.update_layout(
-                title="<b>Lead Score Distribution</b>",
+                title="Lead Score Distribution",
                 xaxis_title="Score Range",
                 yaxis_title="Number of Leads",
-                height=350,
+                height=380,
                 plot_bgcolor='rgba(0,0,0,0)',
-                paper_bgcolor='rgba(0,0,0,0)'
+                paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(t=50, b=40, l=30, r=20)
             )
             st.plotly_chart(fig_dist, use_container_width=True)
         
-        with col2:
+        with chart_col2:
             # Opportunity stage breakdown with custom colors
             stage_counts = {}
             for opp in scored_opps:
@@ -468,7 +635,7 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
     
     # TAB 4: AI CHAT
     with tab4:
-        st.header("🤖 Conversational AI Assistant")
+        st.header("Conversational AI Assistant")
         st.markdown("Ask questions about your leads and opportunities in natural language!")
         
         # Initialize chat agent
@@ -500,45 +667,46 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
             st.session_state.chat_history = []
         
         # Example queries
-        st.markdown("### 💡 Try asking:")
+        st.markdown("### Try asking:")
         col1, col2, col3 = st.columns(3)
         with col1:
-            st.markdown("**📊 Basic Queries:**")
-            if st.button("🏆 Show me top 5 leads"):
+            st.markdown("**Basic Queries:**")
+            if st.button("Show me top 5 leads"):
                 st.session_state.current_query = "Show me top 5 leads"
-            if st.button("💰 Top 3 opportunities"):
+            if st.button("Top 3 opportunities"):
                 st.session_state.current_query = "Show me top 3 opportunities"
-            if st.button("📊 Quick pipeline summary"):
+            if st.button("Quick pipeline summary"):
                 st.session_state.current_query = "Give me quick pipeline summary"
-            if st.button("📈 Complete opportunity analysis"):
+            if st.button("Complete opportunity analysis"):
                 st.session_state.current_query = "Give me complete opportunity summary"
         with col2:
-            st.markdown("**🔍 Advanced Analysis:**")
-            if st.button("🚨 Critical actions today"):
+            st.markdown("**Advanced Analysis:**")
+            if st.button("Critical actions today"):
                 st.session_state.current_query = "What are the critical actions I need to take today?"
-            if st.button("⚠️ High-value deals at risk"):
+            if st.button("High-value deals at risk"):
                 st.session_state.current_query = "Show me high-value deals at risk"
-            if st.button("🐌 Stale leads (30+ days)"):
+            if st.button("Stale leads (30+ days)"):
                 st.session_state.current_query = "Find stale leads that haven't been contacted in 30 days"
-            if st.button("📈 Deal velocity analysis"):
+            if st.button("Deal velocity analysis"):
                 st.session_state.current_query = "Analyze deal velocity"
         with col3:
-            st.markdown("**💡 Smart Actions:**")
-            if st.button("💰 Discount strategy"):
+            st.markdown("**Smart Actions:**")
+            if st.button("Discount strategy"):
                 st.session_state.current_query = "Suggest discount strategy for United Oil opportunity"
-            if st.button("⚖️ Compare opportunities"):
+            if st.button("Compare opportunities"):
                 st.session_state.current_query = "Compare top 2 opportunities"
-            if st.button("🔍 Search lead"):
+            if st.button("Search lead"):
                 st.session_state.current_query = "Search for lead named Bertha Boxer"
-            if st.button("🔄 Reset conversation"):
+            if st.button("Reset conversation"):
                 st.session_state.chat_agent.reset_conversation()
                 st.session_state.chat_history = []
+                save_chat_history()
                 st.success("Conversation reset!")
         
         st.markdown("---")
         
         # Chat interface
-        user_input = st.chat_input("💬 Ask me anything about your leads and opportunities...")
+        user_input = st.chat_input("Ask me anything about your leads and opportunities...")
         
         # Handle button clicks
         if 'current_query' in st.session_state:
@@ -566,7 +734,7 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
             
             # Add user message to history
             st.session_state.chat_history.append({"role": "user", "content": user_input})
-            
+            save_chat_history()
             # Get AI response
             try:
                 with st.chat_message("assistant"):
@@ -619,12 +787,7 @@ if 'run_analysis' in st.session_state and st.session_state.run_analysis:
                 import traceback
                 st.code(traceback.format_exc())
                 st.session_state.chat_history.append({"role": "assistant", "content": error_msg})
-        
-        # Display chat history (excluding the last 2 messages which are already shown)
-        if len(st.session_state.chat_history) > 2:
-            for message in st.session_state.chat_history[:-2]:
-                with st.chat_message(message["role"]):
-                    st.write(message["content"])
+                save_chat_history()
 
 else:
     # Hero section
@@ -632,7 +795,7 @@ else:
     with col2:
         st.markdown("""
         <div style="text-align: center; padding: 3rem 0;">
-            <h2>👈 Click 'Run AI Analysis' to get started</h2>
+            <h2>Click 'Run AI Analysis' to get started</h2>
             <p style="font-size: 1.1rem; color: #666;">Transform your Salesforce data with AI-powered insights</p>
         </div>
         """, unsafe_allow_html=True)
@@ -643,7 +806,7 @@ else:
     with col1:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">🎯</div>
+            <div style="font-size: 2rem;">🎯</div>
             <h3>AI Lead Scoring</h3>
             <p>GPT-4 powered prioritization with 0-100 scoring system</p>
         </div>
@@ -652,7 +815,7 @@ else:
     with col2:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">💎</div>
+            <div style="font-size: 2rem;">💎</div>
             <h3>Opportunity Analysis</h3>
             <p>Conversion likelihood prediction and pipeline insights</p>
         </div>
@@ -661,7 +824,7 @@ else:
     with col3:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">📝</div>
+            <div style="font-size: 2rem;">📝</div>
             <h3>Smart Follow-ups</h3>
             <p>AI-generated personalized action plans for each prospect</p>
         </div>
@@ -674,7 +837,7 @@ else:
     with col1:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">📊</div>
+            <div style="font-size: 2rem;">📊</div>
             <h3>Visual Dashboards</h3>
             <p>Interactive charts and real-time analytics</p>
         </div>
@@ -683,7 +846,7 @@ else:
     with col2:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">🔄</div>
+            <div style="font-size: 2rem;">🔄</div>
             <h3>Real-time Sync</h3>
             <p>Direct Salesforce API integration for live data</p>
         </div>
@@ -692,7 +855,7 @@ else:
     with col3:
         st.markdown("""
         <div style="background: #f8f9fa; padding: 2rem; border-radius: 10px; text-align: center; height: 250px;">
-            <div style="font-size: 3rem;">⚡</div>
+            <div style="font-size: 2rem;">⚡</div>
             <h3>Lightning Fast</h3>
             <p>Optimized performance with intelligent caching</p>
         </div>
